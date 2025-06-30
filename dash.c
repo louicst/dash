@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +22,18 @@ void execute_command(char **argv);
 void print_error(void);
 
 // === Main ===
-int main(void) {
+/*
+int main(int argc, char **argv) {
+    //Pas besoin de argv ici, mais main ne prend que 0 ou 2 arguments, donc on fait ça...
+    char **inutile = argv;
+    inutile++;
+
+    if(argc >1){
+        //Interdit d'avoir d'autres arguments que ./dash
+        print_error();
+        return 0;
+    }
+
     // Valeur initiale du path : /bin
     search_paths[0] = strdup("/bin");
     path_count = 1;
@@ -29,6 +41,7 @@ int main(void) {
     shell_loop();
     return 0;
 }
+*/
 
 // === Boucle principale ===
 void shell_loop(void) {
@@ -40,16 +53,22 @@ void shell_loop(void) {
         fflush(stdout);
 
         ssize_t nread = getline(&line, &len, stdin);
-        if (nread == -1) break;
+        if (nread == -1){
+            break;
+        }
 
         if (line[nread - 1] == '\n') {
             line[nread - 1] = '\0';
         }
 
-        if (handle_builtin(line)) break;
+        if (handle_builtin(line)){
+            break;
+        }
 
         char **argv = parse_command(line);
-        if (argv[0] != NULL) {
+
+        //On execute la commande sauf si c'était une commande path
+        if ((argv[0] != NULL )&&!((argv[0][0] == 'p') && (argv[0][1] == 'a') && (argv[0][2] == 't') && (argv[0][3] == 'h')) ) {
             execute_command(argv);
         }
         free(argv);
@@ -71,7 +90,7 @@ int handle_builtin(char *line) {
     }
 
     if (strcmp(token, "exit") == 0) {
-        // Vérifie qu’il n’y a pas d’argument après
+        // Vérifie qu'il n'y a pas d'argument après
         token = strsep(&ptr, " \t");
         if (token != NULL && *token != '\0') {
             print_error();
@@ -101,18 +120,20 @@ int handle_builtin(char *line) {
 // === Mise à jour du path ===
 void set_path(char **argv) {
     // Libère les anciens chemins
-    for (int i = 0; i < path_count; i++) {
+    int i;
+
+    for (i= 0; i < path_count; i++) {
         free(search_paths[i]);
     }
     path_count = 0;
 
     // Enregistre les nouveaux chemins
-    for (int i = 0; argv[i] != NULL && i < MAX_PATHS; i++) {
+    for (i = 0; argv[i] != NULL && i < MAX_PATHS; i++) {
         search_paths[path_count++] = strdup(argv[i]);
     }
 }
 
-// === Parsing d’une ligne en argv ===
+// === Parsing d'une ligne en argv ===
 char **parse_command(char *line) {
     char **argv = malloc(sizeof(char *) * MAX_ARGS);
     if (!argv) {
@@ -124,9 +145,13 @@ char **parse_command(char *line) {
     char *token;
 
     while ((token = strsep(&line, " \t")) != NULL) {
-        if (*token == '\0') continue;
+        if (*token == '\0'){
+            continue;
+        }
         argv[argc++] = token;
-        if (argc >= MAX_ARGS - 1) break;
+        if (argc >= MAX_ARGS - 1){
+            break;
+        }
     }
     argv[argc] = NULL;
     return argv;
@@ -167,7 +192,7 @@ void execute_command(char **argv) {
     }
 }
 
-// === Message d’erreur standard ===
+// === Message d'erreur standard ===
 void print_error(void) {
     write(STDERR_FILENO, ERROR_MESSAGE, strlen(ERROR_MESSAGE));
 }
