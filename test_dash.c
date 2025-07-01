@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <limits.h>
 
 // On inclut les prototypes nécessaires du shell
 #define MAX_ARGS 100
@@ -10,6 +13,7 @@ extern char *search_paths[MAX_PATHS];
 extern int path_count;
 char **parse_command(char *line);
 void set_path(char **argv);
+int handle_builtin(char *line);
 
 // Pour les tests, on utilise les variables globales du shell (pas de redéfinition ici)
 
@@ -46,8 +50,53 @@ void test_set_path() {
     free_paths();
 }
 
+void test_cd() {
+    printf("Test cd... ");
+    char cwd[PATH_MAX];
+    char tmpdir[] = "./cd_test_dir";
+    int ok = 1;
+    if (mkdir(tmpdir, 0700) != 0) {
+        perror("mkdir");
+        ok = 0;
+    }
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        perror("getcwd");
+        ok = 0;
+    }
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "cd %s", tmpdir);
+    printf("\n  Avant cd: %s\n", cwd);
+    handle_builtin(cmd);
+    char newcwd[PATH_MAX];
+    if (getcwd(newcwd, sizeof(newcwd)) == NULL) {
+        perror("getcwd");
+        ok = 0;
+    }
+    printf("  Après cd: %s\n", newcwd);
+    // Vérifie que le chemin courant se termine bien par cd_test_dir
+    const char *suffix = "/cd_test_dir";
+    size_t suffix_len = strlen(suffix);
+    size_t len = strlen(newcwd);
+    int ok_cd = (len >= suffix_len && strcmp(newcwd + len - suffix_len, suffix) == 0);
+    printf("    cd normal: %s\n", ok_cd ? "OK" : "FAIL");
+    // Test cd sans argument
+    int ok_empty = (handle_builtin("cd") == 0);
+    printf("    cd sans argument: %s\n", ok_empty ? "OK" : "FAIL");
+    // Test cd avec trop d'arguments
+    int ok_too_many = (handle_builtin("cd dir1 dir2") == 0);
+    printf("    cd trop d'arguments: %s\n", ok_too_many ? "OK" : "FAIL");
+    // Test cd vers dossier inexistant
+    int ok_inex = (handle_builtin("cd /doesnotexist12345") == 0);
+    printf("    cd inexistant: %s\n", ok_inex ? "OK" : "FAIL");
+    // Retour au dossier initial
+    chdir(cwd);
+    rmdir(tmpdir);
+    if (ok_cd && ok_empty && ok_too_many && ok_inex && ok) printf("Test cd... OK\n"); else printf("Test cd... FAIL\n");
+}
+
 int main() {
     test_parse_command();
     test_set_path();
+    test_cd();
     return 0;
 } 

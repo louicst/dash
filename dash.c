@@ -22,7 +22,6 @@ void execute_command(char **argv);
 void print_error(void);
 
 // === Main ===
-/*
 int main(int argc, char **argv) {
     //Pas besoin de argv ici, mais main ne prend que 0 ou 2 arguments, donc on fait ça...
     char **inutile = argv;
@@ -41,7 +40,6 @@ int main(int argc, char **argv) {
     shell_loop();
     return 0;
 }
-*/
 
 // === Boucle principale ===
 void shell_loop(void) {
@@ -67,8 +65,8 @@ void shell_loop(void) {
 
         char **argv = parse_command(line);
 
-        //On execute la commande sauf si c'était une commande path
-        if ((argv[0] != NULL )&&!((argv[0][0] == 'p') && (argv[0][1] == 'a') && (argv[0][2] == 't') && (argv[0][3] == 'h')) ) {
+        //On execute la commande sauf si c'était une commande path ou cd
+        if ((argv[0] != NULL )&&!((argv[0][0] == 'p') && (argv[0][1] == 'a') && (argv[0][2] == 't') && (argv[0][3] == 'h'))&&!((argv[0][0] == 'c') && (argv[0][1] == 'd')) ) {
             execute_command(argv);
         }
         free(argv);
@@ -77,42 +75,59 @@ void shell_loop(void) {
     free(line);
 }
 
-// === Commandes intégrées : exit, path ===
+// === Commandes intégrées : exit, path, cd ===
 int handle_builtin(char *line) {
-    // Duplique la ligne avant parsing
     char *line_copy = strdup(line);
-    char *ptr = line_copy;
-    char *token = strsep(&ptr, " \t");
+    char **argv = parse_command(line_copy);
+    int result = 0;
 
-    if (token == NULL) {
-        free(line_copy);
-        return 0;
-    }
-
-    if (strcmp(token, "exit") == 0) {
-        // Vérifie qu'il n'y a pas d'argument après
-        token = strsep(&ptr, " \t");
-        if (token != NULL && *token != '\0') {
-            print_error();
-            free(line_copy);
-            return 0;
-        }
-        free(line_copy);
-        return 1;
-    }
-
-    if (strcmp(token, "path") == 0) {
-        // Récupère les arguments
-        char *args_line = ptr;
-        char **argv = parse_command(args_line);
-
-        // Met à jour la liste des chemins
-        set_path(argv);
+    if (argv[0] == NULL) {
         free(argv);
         free(line_copy);
         return 0;
     }
 
+    if (strcmp(argv[0], "exit") == 0) {
+        // exit ne prend pas d'argument
+        if (argv[1] != NULL) {
+            print_error();
+            result = 0;
+        } else {
+            result = 1; // signaler la sortie du shell
+        }
+        free(argv);
+        free(line_copy);
+        return result;
+    }
+
+    if (strcmp(argv[0], "path") == 0) {
+        // path prend 0 ou plusieurs arguments
+        set_path(&argv[1]);
+        free(argv);
+        free(line_copy);
+        return 0;
+    }
+
+    if (strcmp(argv[0], "cd") == 0) {
+        // cd prend exactement un argument
+        if (argv[1] == NULL || argv[2] != NULL) {
+            print_error();
+        } else {
+            if (chdir(argv[1]) != 0) {
+                print_error();
+            } else {
+                char buf[4096];
+                if (getcwd(buf, sizeof(buf)) != NULL) {
+                    printf("moving to %s\n", buf);
+                }
+            }
+        }
+        free(argv);
+        free(line_copy);
+        return 0;
+    }
+
+    free(argv);
     free(line_copy);
     return 0;
 }
