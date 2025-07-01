@@ -2,8 +2,8 @@ Bonjour et bienvenue dans ce super programme 'dash'
 
 contributeurs : 
 
-**Louis Castan
-**Titouan ROPARTZ
+**Louis Castan** et
+**Titouan ROPARTZ**
 
 l'objectif est de simuler un shell, mais tout est indiqué dans le fichier "projet.pdf".
 
