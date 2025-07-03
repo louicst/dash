@@ -94,9 +94,52 @@ void test_cd() {
     if (ok_cd && ok_empty && ok_too_many && ok_inex && ok) printf("Test cd... OK\n"); else printf("Test cd... FAIL\n");
 }
 
+void test_parse_redirection() {
+    printf("Test parse redirection... ");
+    char input[] = "ls -l < dash.c";
+    char **argv = parse_command(input);
+    int ok = 1;
+    int found = 0;
+    for (int i = 0; argv[i] != NULL; i++) {
+        if (strcmp(argv[i], "<") == 0) found = 1;
+    }
+    if (!found) ok = 0;
+    if (strcmp(argv[0], "ls") != 0) ok = 0;
+    if (strcmp(argv[1], "-l") != 0) ok = 0;
+    if (strcmp(argv[2], "<") != 0) ok = 0;
+    if (strcmp(argv[3], "dash.c") != 0) ok = 0;
+    if (ok) printf("OK\n"); else printf("FAIL\n");
+    free(argv);
+}
+
+void test_cd_errors() {
+    printf("Test cd errors... ");
+    int ok = 1;
+    // cd sans argument
+    if (handle_builtin("cd") != 0) ok = 0;
+    // cd trop d'arguments
+    if (handle_builtin("cd dir1 dir2") != 0) ok = 0;
+    // cd dossier inexistant
+    if (handle_builtin("cd /doesnotexist12345") != 0) ok = 0;
+    if (ok) printf("OK\n"); else printf("FAIL\n");
+}
+
+void test_path_empty() {
+    printf("Test path empty... ");
+    // Vide le path
+    char *args[] = {NULL};
+    set_path(args);
+    // On ne peut pas tester execute_command directement car elle fork, mais on peut vérifier path_count
+    int ok = (path_count == 0);
+    if (ok) printf("OK\n"); else printf("FAIL\n");
+}
+
 int main() {
     test_parse_command();
     test_set_path();
     test_cd();
+    test_parse_redirection();
+    test_cd_errors();
+    test_path_empty();
     return 0;
 } 

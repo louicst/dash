@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #define MAX_ARGS 100
 #define MAX_PATHS 100
@@ -20,8 +21,10 @@ void set_path(char **argv);
 char **parse_command(char *line);
 void execute_command(char **argv);
 void print_error(void);
+char *trim(char *str);
 
 // === Main ===
+/*
 int main(int argc, char **argv) {
     //Pas besoin de argv ici, mais main ne prend que 0 ou 2 arguments, donc on fait ça...
     char **inutile = argv;
@@ -40,6 +43,7 @@ int main(int argc, char **argv) {
     shell_loop();
     return 0;
 }
+*/
 
 // === Boucle principale ===
 void shell_loop(void) {
@@ -148,6 +152,16 @@ void set_path(char **argv) {
     }
 }
 
+// === Ajout d'une fonction utilitaire pour trim les espaces
+char *trim(char *str) {
+    while (*str == ' ' || *str == '\t') str++;
+    if (*str == 0) return str;
+    char *end = str + strlen(str) - 1;
+    while (end > str && (*end == ' ' || *end == '\t')) end--;
+    *(end + 1) = 0;
+    return str;
+}
+
 // === Parsing d'une ligne en argv ===
 char **parse_command(char *line) {
     char **argv = malloc(sizeof(char *) * MAX_ARGS);
@@ -163,6 +177,8 @@ char **parse_command(char *line) {
         if (*token == '\0'){
             continue;
         }
+        token = trim(token);
+        if (*token == '\0') continue;
         argv[argc++] = token;
         if (argc >= MAX_ARGS - 1){
             break;
@@ -179,11 +195,58 @@ void execute_command(char **argv) {
         return;
     }
 
+    // Recherche d'une éventuelle redirection '<'
+    int redirect_index = -1;
+    for (int i = 0; argv[i] != NULL; i++) {
+        // On ignore les espaces autour de '<'
+        if (strcmp(argv[i], "<") == 0) {
+            redirect_index = i;
+            break;
+        }
+    }
+
+    char *input_file = NULL;
+    char *cmd_argv[MAX_ARGS];
+    int i;
+
+    if (redirect_index != -1) {
+        // Vérifie la syntaxe : un seul '<', un seul fichier après, rien après le fichier
+        if (argv[redirect_index + 1] == NULL || argv[redirect_index + 2] != NULL) {
+            print_error();
+            return;
+        }
+        input_file = argv[redirect_index + 1];
+        // Copie la commande sans la redirection
+        for (i = 0; i < redirect_index; i++) {
+            cmd_argv[i] = argv[i];
+        }
+        cmd_argv[redirect_index] = NULL;
+        if (cmd_argv[0] == NULL) {
+            print_error();
+            return;
+        }
+    } else {
+        // Toujours couper à '<' s'il y en a une (sécurité)
+        int cut = -1;
+        for (i = 0; argv[i] != NULL && i < MAX_ARGS; i++) {
+            if (strcmp(argv[i], "<") == 0) {
+                cut = i;
+                break;
+            }
+            cmd_argv[i] = argv[i];
+        }
+        if (cut != -1) {
+            cmd_argv[cut] = NULL;
+        } else {
+            cmd_argv[i] = NULL;
+        }
+    }
+
     char full_path[512];
     int found = 0;
 
     for (int i = 0; i < path_count; i++) {
-        snprintf(full_path, sizeof(full_path), "%s/%s", search_paths[i], argv[0]);
+        snprintf(full_path, sizeof(full_path), "%s/%s", search_paths[i], cmd_argv[0]);
         if (access(full_path, X_OK) == 0) {
             found = 1;
             break;
@@ -199,7 +262,21 @@ void execute_command(char **argv) {
     if (pid < 0) {
         print_error();
     } else if (pid == 0) {
-        execv(full_path, argv);
+        // Redirection si besoin
+        if (redirect_index != -1) {
+            int fd = open(input_file, O_RDONLY);
+            if (fd < 0) {
+                print_error();
+                exit(1);
+            }
+            if (dup2(fd, STDIN_FILENO) < 0) {
+                print_error();
+                close(fd);
+                exit(1);
+            }
+            close(fd);
+        }
+        execv(full_path, cmd_argv);
         print_error();
         exit(1);
     } else {
